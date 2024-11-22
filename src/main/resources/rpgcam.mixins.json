@@ -7,7 +7,8 @@
   ],
   "client": [
     "CameraMixin",
-    "MouseMixin"
+    "MouseMixin",
+    "PlayerEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 1
