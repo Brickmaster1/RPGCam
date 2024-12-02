@@ -8,11 +8,13 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.Items;
 import net.minecraft.util.hit.BlockHitResult;
@@ -20,11 +22,10 @@ import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
-
-import java.awt.*;
 
 import static com.brickmasterhunt.rpgcam.client.CameraUtils.getMouseBasedViewVector;
 
@@ -34,14 +35,17 @@ public class RpgCamClient implements ClientModInitializer {
     private static final MinecraftClient client = MinecraftClient.getInstance();
     private static boolean isDetachedCameraEnabled = false;
     private static boolean isCameraGrabbed = false;
+    private static boolean firstTick = false;
+    private static double savedMousePosX = 0D;
+    private static double savedMousePosY = 0D;
     private static final KeyBinding MOVE_CAMERA_FORWARD_KEY = createKeybinding("move_camera_forward", GLFW.GLFW_KEY_KP_ADD);
     private static final KeyBinding TOGGLE_CAMERA_KEY = createKeybinding("toggle_camera", GLFW.GLFW_KEY_F7);
-    private static final KeyBinding GRAB_CAMERA_KEY = createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
+    public static final KeyBinding GRAB_CAMERA_KEY = createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
     private static final double PLAYER_CAMERA_DISTANCE = 7.0D;
-    private static final double SENSITIVITY = 0.35D;
-    private static final double INITIAL_CAMERA_ANGLE_XZ = 45.0D;
-    private static final double INITIAL_CAMERA_ANGLE_Y = 45.0D;
-    private static final float LERP_FACTOR = 0.25f;
+    private static final float SENSITIVITY = 0.15F;
+    private static final float INITIAL_CAMERA_ANGLE_XZ = 45.0F;
+    private static final float INITIAL_CAMERA_ANGLE_Y = 45.0F;
+    private static final float LERP_FACTOR = 5.0f;
 
     private static BlockPos highlightedBlockPos = null;
 
@@ -87,17 +91,20 @@ public class RpgCamClient implements ClientModInitializer {
         }
 
         if (isDetachedCameraEnabled) {
-            updateCamera();
+            if (GRAB_CAMERA_KEY.isPressed()) {
+                if (!isCameraGrabbed) {
+                    firstTick = true;
+                    isCameraGrabbed = true;
+                    savedMousePosX = client.mouse.getX();
+                    savedMousePosY = client.mouse.getY();
+                    client.mouse.lockCursor();
+                }
+            }
+
             if (!isCameraGrabbed) {
                 updatePlayerRotationToCursor(100.0D, client.player.isHolding(Items.BUCKET));
             }
         }
-    }
-
-    private void updateCamera() {
-        if (client.player == null) return;
-
-        handleCameraRotateInteraction();
     }
 
     private static void toggleDetachedCamera() {
@@ -117,6 +124,9 @@ public class RpgCamClient implements ClientModInitializer {
                 playerPos.y + (PLAYER_CAMERA_DISTANCE * Math.sin(Math.toRadians(INITIAL_CAMERA_ANGLE_Y))),
                 playerPos.z + (PLAYER_CAMERA_DISTANCE * Math.sin(Math.toRadians(INITIAL_CAMERA_ANGLE_XZ)))
             );
+
+            prevCameraAngleYaw = INITIAL_CAMERA_ANGLE_XZ;
+            prevCameraAnglePitch = INITIAL_CAMERA_ANGLE_Y;
 
             Vec3d direction = playerPos.subtract(camera.getPos()).normalize();
             double towardsPlayerYaw = Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90;
@@ -166,65 +176,79 @@ public class RpgCamClient implements ClientModInitializer {
         }
     }
 
-    private void faceTarget(Vec3d targetPos) {
-        Vec3d playerPos = client.player.getPos();
+    private static void faceTarget(Vec3d targetPos) {
+        //assert client.player != null;
+        //ClientPlayerEntity player = client.player;
 
-        // Calculate direction vector from player to target
-        Vec3d direction = targetPos.subtract(playerPos);
+//        Vec3d vec3d = EntityAnchorArgumentType.EntityAnchor.EYES.positionAt(player);
+//        double d = targetPos.x - vec3d.x;
+//        double e = targetPos.y - vec3d.y;
+//        double f = targetPos.z - vec3d.z;
+//        double g = Math.sqrt(d * d + f * f);
+//
+//        float desiredPitch = MathHelper.wrapDegrees((float)(-(MathHelper.atan2(e, g) * 57.2957763671875)));
+//        float desiredYaw = MathHelper.wrapDegrees((float)(MathHelper.atan2(f, d) * 57.2957763671875) - 90.0F);
+//
+//        // Interpolate yaw and pitch
+//        player.setYaw(MathHelper.lerp(client.getTickDelta(), player.getYaw(), desiredYaw));
+//        player.setPitch(MathHelper.lerp(client.getTickDelta(), player.getPitch(), desiredPitch));
+//
+//        player.setHeadYaw(player.getYaw());
+//        player.prevPitch = player.getPitch();
+//        player.prevYaw = player.getYaw();
+//
+//        player.prevHeadYaw = player.headYaw;
+//        player.bodyYaw = player.headYaw;
+//        player.prevBodyYaw = player.bodyYaw;
+        playerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, targetPos);
+    }
 
-        // Calculate desired yaw and pitch
-        double desiredYaw = Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90;
+    private static void playerLookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target) {
+        assert client.player != null;
+        ClientPlayerEntity player = client.player;
 
-        // Calculate pitch based on y-difference and horizontal distance
-        double horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
-        double desiredPitch = Math.toDegrees(-Math.atan2(direction.y, horizontalDistance));
+        Vec3d vec3d = anchorPoint.positionAt(player);
+        double d = target.x - vec3d.x;
+        double e = target.y - vec3d.y;
+        double f = target.z - vec3d.z;
+        double g = Math.sqrt(d * d + f * f);
 
-        float currentYaw = client.player.getYaw();
-        float currentPitch = client.player.getPitch();
+        float pitchToSet = MathHelper.wrapDegrees((float)(-(MathHelper.atan2(e, g) * 57.2957763671875)));
+        float yawToSet = MathHelper.wrapDegrees((float)(MathHelper.atan2(f, d) * 57.2957763671875) - 90.0F);
 
-        // Correctly handle yaw wrapping to avoid spinning the long way around
-        float yawDifference = (float) (desiredYaw - currentYaw);
-        yawDifference = (yawDifference + 540) % 360 - 180; // Normalize to [-180, 180]
+        player.setPitch(MathHelper.lerpAngleDegrees(MathHelper.clamp(LERP_FACTOR * client.getTickDelta(), 0.0F, 1.0F), player.getPitch(), pitchToSet));
+        player.setYaw(MathHelper.lerpAngleDegrees(MathHelper.clamp(LERP_FACTOR * client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), yawToSet));
+        player.setHeadYaw(player.getYaw());
+        player.prevPitch = player.getPitch();
+        player.prevYaw = player.getYaw();
 
-        // Interpolate yaw and pitch
-        float newYaw = currentYaw + LERP_FACTOR * yawDifference;
-        float newPitch = (float) (currentPitch + LERP_FACTOR * (desiredPitch - currentPitch));
-
-        // Apply the updated yaw and pitch
-        client.player.setYaw(newYaw);
-        client.player.setPitch(newPitch);
+        player.prevHeadYaw = player.headYaw;
+        player.bodyYaw = player.headYaw;
+        player.prevBodyYaw = player.bodyYaw;
     }
 
 
-    private static double savedMousePosX = 0D;
-    private static double savedMousePosY = 0D;
-    private void handleCameraRotateInteraction() {
+    private static float prevCameraAngleYaw = 0F;
+    private static float prevCameraAnglePitch = 0F;
+    public static void handleCameraRotateInteraction(double mouseDeltaY) {
         Camera camera = client.gameRenderer.getCamera();
 
         if (GRAB_CAMERA_KEY.isPressed()) {
-            if (!isCameraGrabbed) {
-                isCameraGrabbed = true;
-                savedMousePosX = client.mouse.getX();
-                savedMousePosY = client.mouse.getY();
-                client.mouse.lockCursor();
-            }
-
-            double mouseDeltaX = client.mouse.getX();
-            double mouseDeltaY = client.mouse.getY();
-
-            client.mouse.lockCursor();
-
-            if (mouseDeltaX == 0D && mouseDeltaY == 0D) {
+            if (firstTick) { // Prevent the jump that happens when first pressing the move button
+                firstTick = false;
                 return;
             }
 
-            double newCameraAngleYaw = (SENSITIVITY * mouseDeltaX) + camera.getYaw();
-            double newCameraAnglePitch = (SENSITIVITY * mouseDeltaY) + camera.getPitch();
-            if(newCameraAnglePitch > 89.99D) { newCameraAnglePitch = 89.99D; }
-            else if (newCameraAnglePitch < -89.99D) { newCameraAnglePitch = -89.99D; }
+            if (Math.abs(client.mouse.getX()) <= 1.0D && Math.abs(mouseDeltaY) <= 1.0D) {
+                return;
+            }
+
+            float newCameraAngleYaw = ((float) client.mouse.getX() * SENSITIVITY) + prevCameraAngleYaw;
+            float newCameraAnglePitch = ((float) mouseDeltaY * SENSITIVITY) + prevCameraAnglePitch;
+            newCameraAnglePitch = MathHelper.clamp(newCameraAnglePitch, -90.0F, 90.0F);
 
             // Allow camera to continuously spin without large angle
-            float cameraAngleYawDifference = (float) (newCameraAngleYaw - camera.getYaw());
+            float cameraAngleYawDifference = newCameraAngleYaw - camera.getYaw();
             newCameraAngleYaw = (cameraAngleYawDifference + 540) % 360 - 180; // Normalize to [-180, 180]
 
             Vec3d playerPos = client.player.getPos();
@@ -237,6 +261,9 @@ public class RpgCamClient implements ClientModInitializer {
                 playerPos.y + (PLAYER_CAMERA_DISTANCE * Math.sin(pitchRadians)),
                 playerPos.z + (PLAYER_CAMERA_DISTANCE * Math.cos(pitchRadians) * Math.sin(yawRadians))
             );
+
+            prevCameraAngleYaw = newCameraAngleYaw;
+            prevCameraAnglePitch = newCameraAnglePitch;
 
             Vec3d direction = playerPos.subtract(camera.getPos()).normalize();
             double towardsPlayerYaw = Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90;
