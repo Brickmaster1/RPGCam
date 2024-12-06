@@ -35,9 +35,13 @@ public class RpgCamClient implements ClientModInitializer {
     private static final MinecraftClient client = MinecraftClient.getInstance();
     private static boolean isDetachedCameraEnabled = false;
     private static boolean isCameraGrabbed = false;
-    private static boolean firstTick = false;
+    private  static boolean initialDelta = false;
     private static double savedMousePosX = 0D;
     private static double savedMousePosY = 0D;
+    static double mouseDeltaX = 0.0D;
+    static double prevMousePosX = 0.0D;
+    private static float prevCameraAngleYaw = 0F;
+    private static float prevCameraAnglePitch = 0F;
     private static final KeyBinding MOVE_CAMERA_FORWARD_KEY = createKeybinding("move_camera_forward", GLFW.GLFW_KEY_KP_ADD);
     private static final KeyBinding TOGGLE_CAMERA_KEY = createKeybinding("toggle_camera", GLFW.GLFW_KEY_F7);
     public static final KeyBinding GRAB_CAMERA_KEY = createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
@@ -45,7 +49,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static final float SENSITIVITY = 0.15F;
     private static final float INITIAL_CAMERA_ANGLE_XZ = 45.0F;
     private static final float INITIAL_CAMERA_ANGLE_Y = 45.0F;
-    private static final float LERP_FACTOR = 5.0f;
+    private static final float LERP_FACTOR = 5.0F;
+    private static final double RAYCAST_MAX_DISTANCE = 100.0D;
 
     private static BlockPos highlightedBlockPos = null;
 
@@ -93,16 +98,17 @@ public class RpgCamClient implements ClientModInitializer {
         if (isDetachedCameraEnabled) {
             if (GRAB_CAMERA_KEY.isPressed()) {
                 if (!isCameraGrabbed) {
-                    firstTick = true;
                     isCameraGrabbed = true;
+                    initialDelta = true;
                     savedMousePosX = client.mouse.getX();
                     savedMousePosY = client.mouse.getY();
+
                     client.mouse.lockCursor();
                 }
             }
 
             if (!isCameraGrabbed) {
-                updatePlayerRotationToCursor(100.0D, client.player.isHolding(Items.BUCKET));
+                updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET));
             }
         }
     }
@@ -227,29 +233,35 @@ public class RpgCamClient implements ClientModInitializer {
         player.prevBodyYaw = player.bodyYaw;
     }
 
-
-    private static float prevCameraAngleYaw = 0F;
-    private static float prevCameraAnglePitch = 0F;
     public static void handleCameraRotateInteraction(double mouseDeltaY) {
         Camera camera = client.gameRenderer.getCamera();
-
         if (GRAB_CAMERA_KEY.isPressed()) {
-            if (firstTick) { // Prevent the jump that happens when first pressing the move button
-                firstTick = false;
+            double mousePosX = (client.mouse.getX() - ((double) client.getWindow().getWidth() / 2));
+            mouseDeltaX = mousePosX - prevMousePosX;
+//            if (initialDelta) {
+//                mouseDeltaX = client.mouse.getX() - ((double) client.getWindow().getWidth() / 2);
+//                if (client.mouse.getX() >= ((double) client.getWindow().getWidth() / 2) + 1.0 ||
+//                    client.mouse.getX() <= ((double) client.getWindow().getWidth() / 2) - 1.0)
+//                {
+//                    mouseDeltaX = client.mouse.getX() - ((double) client.getWindow().getWidth() / 2);
+//                    initialDelta = false;
+//                } else {
+//                    System.out.println("prevCameraAngleYaw: " + prevCameraAngleYaw);
+//                }
+//            }
+
+            if (Math.abs(mouseDeltaX) <= 1.0D && Math.abs(mouseDeltaY) <= 1.0D) {
                 return;
             }
 
-            if (Math.abs(client.mouse.getX()) <= 1.0D && Math.abs(mouseDeltaY) <= 1.0D) {
-                return;
-            }
-
-            float newCameraAngleYaw = ((float) client.mouse.getX() * SENSITIVITY) + prevCameraAngleYaw;
+            float newCameraAngleYaw = ((float) mouseDeltaX * SENSITIVITY) + prevCameraAngleYaw;
+            System.out.println("newCameraAngleYaw: " + newCameraAngleYaw);
             float newCameraAnglePitch = ((float) mouseDeltaY * SENSITIVITY) + prevCameraAnglePitch;
-            newCameraAnglePitch = MathHelper.clamp(newCameraAnglePitch, -90.0F, 90.0F);
+            newCameraAnglePitch = MathHelper.clamp(newCameraAnglePitch, -89.99F, 89.99F);
 
-            // Allow camera to continuously spin without large angle
-            float cameraAngleYawDifference = newCameraAngleYaw - camera.getYaw();
-            newCameraAngleYaw = (cameraAngleYawDifference + 540) % 360 - 180; // Normalize to [-180, 180]
+            //newCameraAngleYaw = newCameraAngleYaw - prevCameraAngleYaw;
+            //newCameraAngleYaw = (cameraAngleYawDifference + 540) % 360 - 180; // Normalize to [-180, 180]
+            newCameraAngleYaw = MathHelper.wrapDegrees(newCameraAngleYaw);
 
             Vec3d playerPos = client.player.getPos();
 
@@ -265,6 +277,8 @@ public class RpgCamClient implements ClientModInitializer {
             prevCameraAngleYaw = newCameraAngleYaw;
             prevCameraAnglePitch = newCameraAnglePitch;
 
+            prevMousePosX = mousePosX;
+
             Vec3d direction = playerPos.subtract(camera.getPos()).normalize();
             double towardsPlayerYaw = Math.toDegrees(Math.atan2(direction.z, direction.x)) - 90;
             double towardsPlayerPitch = Math.toDegrees(-Math.atan2(direction.y, Math.sqrt(direction.x * direction.x + direction.z * direction.z)));
@@ -277,6 +291,7 @@ public class RpgCamClient implements ClientModInitializer {
             GLFW.glfwSetCursorPos(client.getWindow().getHandle(), savedMousePosX, savedMousePosY);
             savedMousePosX = 0D;
             savedMousePosY = 0D;
+            prevMousePosX = 0D;
         }
     }
 

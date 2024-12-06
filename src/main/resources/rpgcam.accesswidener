@@ -7,3 +7,6 @@ accessible field net/minecraft/client/render/Camera yaw F
 accessible field net/minecraft/client/render/Camera horizontalPlane Lorg/joml/Vector3f;
 accessible field net/minecraft/client/render/Camera verticalPlane Lorg/joml/Vector3f;
 accessible field net/minecraft/client/render/Camera diagonalPlane Lorg/joml/Vector3f;
+accessible field net/minecraft/client/Mouse cursorDeltaX D
+accessible method net/minecraft/client/MinecraftClient handleBlockBreaking (Z)V
+accessible method net/minecraft/client/MinecraftClient doAttack ()Z
