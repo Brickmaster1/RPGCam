@@ -1,51 +1,73 @@
 package com.brickmasterhunt.rpgcam.client.mixin;
 
-import com.brickmasterhunt.rpgcam.client.RpgCamClient;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.Perspective;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(MinecraftClient.class)
-public class MinecraftClientMixin {
-    @Unique
-    private boolean cachedBl3 = false;
+public abstract class MinecraftClientMixin {
+    @Shadow public abstract void handleBlockBreaking(boolean breaking);
+
+//    @Inject(
+//        method = "doAttack",
+//        at = @At("HEAD"),
+//        cancellable = true
+//    )
+//    public void onDoAttack(CallbackInfoReturnable<Boolean> cir) {
+//        PlayerAdapter player = new PlayerAdapter(MinecraftClient.getInstance().player);
+//        if (DelayedActionManager.onMouseAction(player, new MouseAction(this::method_1536))) {
+//            cir.setReturnValue(false);
+//        }
+//
+//    }
 
     @Inject(
-            method = "handleInputEvents",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/option/KeyBinding;wasPressed()Z",
-                    ordinal = 0
-            ),
-            cancellable = true
+        method = "handleBlockBreaking",
+        at = @At("HEAD"),
+        cancellable = true
     )
-    private void interceptAttackKey(CallbackInfo ci) {
-        if (RpgCamClient.isDetachedCameraEnabled()) {
-            // Custom logic to replace the while block
-            while (MinecraftClient.getInstance().options.attackKey.wasPressed()) {
-                cachedBl3 |= MinecraftClient.getInstance().doAttack();
-            }
-        }
-    }
-
-    @Inject(
-            method = "handleInputEvents",
-            at = @At(
-                value = "INVOKE",
-                target = "Lnet/minecraft/client/MinecraftClient;handleBlockBreaking(Z)V"
-            ),
-            cancellable = true
-    )
-    private void onHandleBlockBreaking(CallbackInfo ci) {
-        if (RpgCamClient.isDetachedCameraEnabled()) {
-            MinecraftClient.getInstance().handleBlockBreaking(MinecraftClient.getInstance().currentScreen == null && !cachedBl3 && MinecraftClient.getInstance().options.attackKey.isPressed());
+    public void onBlockBreaking(boolean pressed, CallbackInfo ci) {
+        if (pressed) {
+            this.handleBlockBreaking(true);
+        } else {
             ci.cancel();
         }
+
     }
+
+//    @Redirect(
+//        method = {"handleInputEvents"},
+//        at = @At(
+//                value = "INVOKE",
+//                target = "Lnet/minecraft/client/MinecraftClient;doItemUse()V",
+//                ordinal = 0
+//        )
+//    )
+//    public void onDoItemUse(MinecraftClient client) {
+//        if (!BetterThirdPerson.getCameraManager().onMouseAction(player, new MouseAction(this::method_1583))) {
+//            this.method_1583();
+//        }
+//
+//    }
+
+//    @Redirect(
+//        method = "handleInputEvents",
+//        at = @At(
+//                value = "INVOKE",
+//                target = "Lnet/minecraft/client/MinecraftClient;doItemUse()V",
+//                ordinal = 1
+//        )
+//    )
+//    public void onItemUseRepeatable(MinecraftClient client) {
+//        PlayerAdapter player = new PlayerAdapter(client.field_1724);
+//        if (!BetterThirdPerson.getCameraManager().onMouseAction(player, new ItemRepeatableUseAction(ClientAdapter.INSTANCE, () -> {
+//            return this.field_1752;
+//        }, this::method_1583))) {
+//            this.method_1583();
+//        }
+//
+//    }
 }
