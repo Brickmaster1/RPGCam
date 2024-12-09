@@ -232,18 +232,19 @@ public class RpgCamClient implements ClientModInitializer {
             return;
         }
 
+        // why are the right and left keys angles logically reversed to that of the unit circle? idk, but it works
         float inputAngle = (
-                (client.options.forwardKey.isPressed() && client.options.rightKey.isPressed()) ? 45.0f :
-                (client.options.forwardKey.isPressed() && client.options.leftKey.isPressed()) ? 135.0f :
-                (client.options.backKey.isPressed() && client.options.leftKey.isPressed()) ? 225.0f :
-                (client.options.backKey.isPressed() && client.options.rightKey.isPressed()) ? 315.0f :
-                client.options.rightKey.isPressed() ? 0.0f :
+                (client.options.forwardKey.isPressed() && client.options.leftKey.isPressed()) ? 45.0f :
+                (client.options.forwardKey.isPressed() && client.options.rightKey.isPressed()) ? 135.0f :
+                (client.options.backKey.isPressed() && client.options.rightKey.isPressed()) ? 225.0f :
+                (client.options.backKey.isPressed() && client.options.leftKey.isPressed()) ? 315.0f :
+                client.options.leftKey.isPressed() ? 0.0f :
                 client.options.forwardKey.isPressed() ? 90.0f :
-                client.options.leftKey.isPressed() ? 180.0f :
+                client.options.rightKey.isPressed() ? 180.0f :
                 270.0f // client.options.backKey.isPressed()
             );
 
-        float movementYaw = MathHelper.wrapDegrees(cameraYaw + ((float) Math.toDegrees(inputAngle) + 90.0f)); // Camera-relative movement yaw
+        float movementYaw = MathHelper.wrapDegrees(cameraYaw + inputAngle); // Camera-relative movement yaw
 
         // Calculate motion vector based on movement yaw
         double radianYaw = Math.toRadians(movementYaw);
@@ -252,6 +253,7 @@ public class RpgCamClient implements ClientModInitializer {
 
 //        // Ensure consistent speed regardless of direction
         Vec3d movementVector = new Vec3d(motionX, 0, motionZ).normalize();
+        float speed = (float) Math.sqrt(Math.pow(player.getVelocity().x, 2) + Math.pow(player.getVelocity().y, 2));
 //        cacheMovementHistory(movementVector);
 //
 //        // Adjust speed if the player is interacting or idle
@@ -260,9 +262,9 @@ public class RpgCamClient implements ClientModInitializer {
 //        if (averageDirection != null && averageDirection.lengthSquared() > ALIGNMENT_THRESHOLD) {
 //            movementVector = averageDirection.normalize();
 //        }
-
+        player.speed
         // Apply velocity
-        player.setVelocity(movementVector.x * 1.0f/*speed*/, player.getVelocity().y, movementVector.z * 1.0f/*speed*/);
+        player.setVelocity(movementVector.x * speed, player.getVelocity().y, movementVector.z * speed);
 
         // solve rotation issues later
 //        // Smoothly rotate the player towards the movement direction

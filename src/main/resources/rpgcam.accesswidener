@@ -10,3 +10,4 @@ accessible field net/minecraft/client/render/Camera diagonalPlane Lorg/joml/Vect
 accessible field net/minecraft/client/Mouse cursorDeltaX D
 accessible method net/minecraft/client/MinecraftClient handleBlockBreaking (Z)V
 accessible method net/minecraft/client/MinecraftClient doAttack ()Z
+accessible field net/minecraft/client/option/GameOptions bobView Lnet/minecraft/client/option/SimpleOption;
