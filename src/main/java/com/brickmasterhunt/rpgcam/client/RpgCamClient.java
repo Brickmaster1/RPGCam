@@ -36,6 +36,7 @@ public class RpgCamClient implements ClientModInitializer {
     private static final MinecraftClient client = MinecraftClient.getInstance();
     private static boolean isDetachedCameraEnabled = false;
     private static boolean isCameraGrabbed = false;
+    private static boolean needsToInteract = false;
     private static long lastInteractionTime = System.currentTimeMillis();
     private static double savedMousePosX = 0D;
     private static double savedMousePosY = 0D;
@@ -113,15 +114,15 @@ public class RpgCamClient implements ClientModInitializer {
                 }
             }
 
-            handleCameraRelativeMovement(client.getTickDelta(), 120.0f);
+            //handleCameraRelativeMovement(client.getTickDelta(), 120.0f);
 
-//            if (isInteracting()) {
-//                if (!isCameraGrabbed) {
-//                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET));
-//                } else {
-//                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), savedMousePosX, savedMousePosY);
-//                }
-//            }
+            if (isInteracting()) {
+                if (!isCameraGrabbed) {
+                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET));
+                } else {
+                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), savedMousePosX, savedMousePosY);
+                }
+            }
         }
     }
 
@@ -208,72 +209,13 @@ public class RpgCamClient implements ClientModInitializer {
         float playerYaw = MathHelper.wrapDegrees(player.getYaw());
         float cameraYaw = MathHelper.wrapDegrees(currentCameraAngleYaw);
 
-//        // Get WASD inputs
-//        float forwardInput = (client.options.forwardKey.isPressed() ? 1.0f : 0.0f) - (client.options.backKey.isPressed() ? 1.0f : 0.0f);
-//        float strafeInput = (client.options.rightKey.isPressed() ? 1.0f : 0.0f) - (client.options.leftKey.isPressed() ? 1.0f : 0.0f);
-//
-//        // Combine inputs into a single vector
-//        Vec2f inputVector = new Vec2f(strafeInput, forwardInput);
-//        if (inputVector.lengthSquared() > 0.01f) {
-//            inputVector = inputVector.normalize(); // Normalize input for consistent movement
-//        } else {
-//            return; // No meaningful input
-//        }
-//
-//        // Rotate input vector into camera-relative space
-//        float inputAngle = (float) Math.atan2(inputVector.x, inputVector.y); // Angle of the input vector
-        if (
-            !client.options.forwardKey.isPressed() &&
-            !client.options.backKey.isPressed() &&
-            !client.options.rightKey.isPressed() &&
-            !client.options.leftKey.isPressed()
 
-        ) {
-            return;
-        }
+        // Smoothly rotate the player towards the movement direction
+        float targetPlayerYaw = (float) Math.toDegrees(Math.atan2(-movementVector.x, movementVector.z));
+        rotationSpeed = rotationSpeed * deltaTime; // Degrees per second
+        float newPlayerYaw = MathHelper.stepUnwrappedAngleTowards(playerYaw, targetPlayerYaw, rotationSpeed);
 
-        // why are the right and left keys angles logically reversed to that of the unit circle? idk, but it works
-        float inputAngle = (
-                (client.options.forwardKey.isPressed() && client.options.leftKey.isPressed()) ? 45.0f :
-                (client.options.forwardKey.isPressed() && client.options.rightKey.isPressed()) ? 135.0f :
-                (client.options.backKey.isPressed() && client.options.rightKey.isPressed()) ? 225.0f :
-                (client.options.backKey.isPressed() && client.options.leftKey.isPressed()) ? 315.0f :
-                client.options.leftKey.isPressed() ? 0.0f :
-                client.options.forwardKey.isPressed() ? 90.0f :
-                client.options.rightKey.isPressed() ? 180.0f :
-                270.0f // client.options.backKey.isPressed()
-            );
-
-        float movementYaw = MathHelper.wrapDegrees(cameraYaw + inputAngle); // Camera-relative movement yaw
-
-        // Calculate motion vector based on movement yaw
-        double radianYaw = Math.toRadians(movementYaw);
-        double motionX = -Math.sin(radianYaw);
-        double motionZ = Math.cos(radianYaw);
-
-//        // Ensure consistent speed regardless of direction
-        Vec3d movementVector = new Vec3d(motionX, 0, motionZ).normalize();
-        float speed = (float) Math.sqrt(Math.pow(player.getVelocity().x, 2) + Math.pow(player.getVelocity().y, 2));
-//        cacheMovementHistory(movementVector);
-//
-//        // Adjust speed if the player is interacting or idle
-//        double speed = isInteracting() ? 0.05 : 0.1; // Slower speed during interaction
-//        Vec3d averageDirection = calculateAverageDirection();
-//        if (averageDirection != null && averageDirection.lengthSquared() > ALIGNMENT_THRESHOLD) {
-//            movementVector = averageDirection.normalize();
-//        }
-        player.speed
-        // Apply velocity
-        player.setVelocity(movementVector.x * speed, player.getVelocity().y, movementVector.z * speed);
-
-        // solve rotation issues later
-//        // Smoothly rotate the player towards the movement direction
-//        float targetPlayerYaw = (float) Math.toDegrees(Math.atan2(-movementVector.x, movementVector.z));
-//        rotationSpeed = rotationSpeed * deltaTime; // Degrees per second
-//        float newPlayerYaw = MathHelper.stepUnwrappedAngleTowards(playerYaw, targetPlayerYaw, rotationSpeed);
-//
-//        player.setYaw(newPlayerYaw);
-//        player.setBodyYaw(newPlayerYaw);
+        player.setYaw(newPlayerYaw);
     }
 
     private Vec3d calculateAverageDirection() {
@@ -298,8 +240,18 @@ public class RpgCamClient implements ClientModInitializer {
         return System.currentTimeMillis() - lastInteractionTime < 3000;
     }
 
-    private void updateLastInteractionTime() {
-        lastInteractionTime = System.currentTimeMillis();
+    private void updateInteractionStatus() {
+        if ((!client.options.attackKey.wasPressed() && client.options.attackKey.isPressed()) ||
+            (!client.options.useKey.wasPressed() && client.options.useKey.isPressed())
+        ) {
+            needsToInteract = true;
+        }
+
+        if (client.options.attackKey.isPressed() ||
+            client.options.useKey.isPressed()
+        ) {
+            lastInteractionTime = System.currentTimeMillis();
+        }
     }
 
     private static void playerLookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target, float lerp) {
@@ -383,6 +335,10 @@ public class RpgCamClient implements ClientModInitializer {
         camera.horizontalPlane.set(0.0F, 0.0F, 1.0F).rotate(camera.getRotation());
         camera.verticalPlane.set(0.0F, 1.0F, 0.0F).rotate(camera.getRotation());
         camera.diagonalPlane.set(1.0F, 0.0F, 0.0F).rotate(camera.getRotation());
+    }
+
+    public static Vec2f getCameraRotation() {
+        return new Vec2f(currentCameraAngleYaw, currentCameraAnglePitch);
     }
 
     public static boolean isDetachedCameraEnabled() {
