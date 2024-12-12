@@ -22,7 +22,6 @@ public class CameraMixin {
             ci.cancel();  // Prevent default camera position handling
         }
     }
-
     // Prevent setRotation from causing recursion when the camera is detached
     @Inject(method = "setRotation(FF)V", at = @At("HEAD"), cancellable = true)
     public void setRotation(float yaw, float pitch, CallbackInfo ci) {

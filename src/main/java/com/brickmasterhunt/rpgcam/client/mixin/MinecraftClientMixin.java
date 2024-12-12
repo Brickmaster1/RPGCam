@@ -24,19 +24,19 @@ public abstract class MinecraftClientMixin {
 //
 //    }
 
-    @Inject(
-        method = "handleBlockBreaking",
-        at = @At("HEAD"),
-        cancellable = true
-    )
-    public void onBlockBreaking(boolean pressed, CallbackInfo ci) {
-        if (pressed) {
-            this.handleBlockBreaking(true);
-        } else {
-            ci.cancel();
-        }
-
-    }
+//    @Inject(
+//        method = "handleBlockBreaking",
+//        at = @At("HEAD"),
+//        cancellable = true
+//    )
+//    public void onBlockBreaking(boolean pressed, CallbackInfo ci) {
+//        if (pressed) {
+//            this.handleBlockBreaking(true);
+//        } else {
+//            ci.cancel();
+//        }
+//
+//    }
 
 //    @Redirect(
 //        method = {"handleInputEvents"},

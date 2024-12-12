@@ -57,7 +57,7 @@ public class RpgCamClient implements ClientModInitializer {
     private static final double RAYCAST_MAX_DISTANCE = 100.0D;
     private static final int MOVEMENT_HISTORY_SIZE = 10;
     private static final double ALIGNMENT_THRESHOLD = 0.05;
-    private final Deque<Vec3d> movementHistory = new ArrayDeque<>();
+    private static final Deque<Vec3d> movementHistory = new ArrayDeque<>();
 
     private static BlockPos highlightedBlockPos = null;
 
@@ -115,6 +115,7 @@ public class RpgCamClient implements ClientModInitializer {
             }
 
             //handleCameraRelativeMovement(client.getTickDelta(), 120.0f);
+            //updateInteractionStatus();
 
             if (isInteracting()) {
                 if (!isCameraGrabbed) {
@@ -202,23 +203,23 @@ public class RpgCamClient implements ClientModInitializer {
     }
 
     private void handleCameraRelativeMovement(float deltaTime, float rotationSpeed /* degrees per second */) {
-        PlayerEntity player = client.player;
-
-        if (player == null) return;
-
-        float playerYaw = MathHelper.wrapDegrees(player.getYaw());
-        float cameraYaw = MathHelper.wrapDegrees(currentCameraAngleYaw);
-
-
-        // Smoothly rotate the player towards the movement direction
-        float targetPlayerYaw = (float) Math.toDegrees(Math.atan2(-movementVector.x, movementVector.z));
-        rotationSpeed = rotationSpeed * deltaTime; // Degrees per second
-        float newPlayerYaw = MathHelper.stepUnwrappedAngleTowards(playerYaw, targetPlayerYaw, rotationSpeed);
-
-        player.setYaw(newPlayerYaw);
+//        PlayerEntity player = client.player;
+//
+//        if (player == null) return;
+//
+//        float playerYaw = MathHelper.wrapDegrees(player.getYaw());
+//        float cameraYaw = MathHelper.wrapDegrees(currentCameraAngleYaw);
+//
+//
+//        // Smoothly rotate the player towards the movement direction
+//        float targetPlayerYaw = (float) Math.toDegrees(Math.atan2(-movementVector.x, movementVector.z));
+//        rotationSpeed = rotationSpeed * deltaTime; // Degrees per second
+//        float newPlayerYaw = MathHelper.stepUnwrappedAngleTowards(playerYaw, targetPlayerYaw, rotationSpeed);
+//
+//        player.setYaw(newPlayerYaw);
     }
 
-    private Vec3d calculateAverageDirection() {
+    public static Vec3d calculateAverageDirection() {
         if (movementHistory.isEmpty()) return Vec3d.ZERO;
 
         Vec3d sum = Vec3d.ZERO;
@@ -228,7 +229,7 @@ public class RpgCamClient implements ClientModInitializer {
         return sum.multiply(1.0 / movementHistory.size());
     }
 
-    private void cacheMovementHistory(Vec3d movementVector) {
+    public static void cacheMovementHistory(Vec3d movementVector) {
         if (movementHistory.size() >= MOVEMENT_HISTORY_SIZE) {
             movementHistory.pollFirst(); // Remove oldest entry
         }

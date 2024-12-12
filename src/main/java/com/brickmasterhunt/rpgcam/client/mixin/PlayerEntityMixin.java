@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 @Mixin(PlayerEntity.class)
 public class PlayerEntityMixin {
     @ModifyArg(
-            method = "travel", // The method name in the target class
+            method = "travel",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/entity/LivingEntity;travel(Lnet/minecraft/util/math/Vec3d;)V"
@@ -27,7 +27,7 @@ public class PlayerEntityMixin {
         if (RpgCamClient.isDetachedCameraEnabled()) {
             MinecraftClient client = MinecraftClient.getInstance();
 
-            float inputAngle = (
+            float inputAngle = ( //Why is inverted, idk? but it works?
                 (client.options.backKey.isPressed() && client.options.rightKey.isPressed()) ? 45.0f :
                 (client.options.backKey.isPressed() && client.options.leftKey.isPressed()) ? 135.0f :
                 (client.options.forwardKey.isPressed() && client.options.leftKey.isPressed()) ? 225.0f :
@@ -35,18 +35,21 @@ public class PlayerEntityMixin {
                 client.options.rightKey.isPressed() ? 0.0f :
                 client.options.backKey.isPressed() ? 90.0f :
                 client.options.leftKey.isPressed() ? 180.0f :
-                270.0f // client.options.backKey.isPressed()
+                270.0f // client.options.forwardKey.isPressed()
             );
 
             double length = movementInput.horizontalLength();
 
-            float movementYaw = MathHelper.wrapDegrees(RpgCamClient.getCameraRotation().x + inputAngle);
+            float movementYaw = RpgCamClient.getCameraRotation().x + inputAngle;
             double radianYaw = Math.toRadians(movementYaw);
 
-            double motionX = -Math.sin(radianYaw) * length;
-            double motionZ = Math.cos(radianYaw) * length;
+            double motionX = Math.sin(radianYaw) * length;
+            double motionZ = -Math.cos(radianYaw) * length;
 
-            return new Vec3d(motionX, movementInput.y, motionZ);
+            Vec3d movementVector = new Vec3d(motionX, movementInput.y, motionZ);
+
+            RpgCamClient.cacheMovementHistory(movementVector);
+            return movementVector;
         }
 
         return movementInput;
