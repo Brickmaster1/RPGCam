@@ -7,8 +7,7 @@
     "CameraMixin",
     "MinecraftClientMixin",
     "MouseMixin",
-    "PlayerEntityMixin",
-    "LivingEntityMixin"
+    "PlayerEntityMixin"
   ],
   "injectors": {
     "defaultRequire": 1

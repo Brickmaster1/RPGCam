@@ -16,7 +16,6 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
@@ -46,6 +45,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static float oldCameraAnglePitch = 0F;
     private static float currentCameraAngleYaw = 0F;
     private static float currentCameraAnglePitch = 0F;
+    public static float currentMovementAngle = 0F;
+    public static Vec3d currentMovementVector = Vec3d.ZERO;
     private static final KeyBinding MOVE_CAMERA_FORWARD_KEY = createKeybinding("move_camera_forward", GLFW.GLFW_KEY_KP_ADD);
     private static final KeyBinding TOGGLE_CAMERA_KEY = createKeybinding("toggle_camera", GLFW.GLFW_KEY_F7);
     public static final KeyBinding GRAB_CAMERA_KEY = createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
@@ -55,9 +56,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static final float INITIAL_CAMERA_ANGLE_Y = 45.0F;
     private static final float LERP_FACTOR = 5.0F;
     private static final double RAYCAST_MAX_DISTANCE = 100.0D;
-    private static final int MOVEMENT_HISTORY_SIZE = 10;
-    private static final double ALIGNMENT_THRESHOLD = 0.05;
-    private static final Deque<Vec3d> movementHistory = new ArrayDeque<>();
+    private static final int MOVEMENT_HISTORY_SIZE = 20;
+    private static final long NOT_INTERACTING_WAIT_TIME = 3000;
 
     private static BlockPos highlightedBlockPos = null;
 
@@ -114,8 +114,9 @@ public class RpgCamClient implements ClientModInitializer {
                 }
             }
 
-            //handleCameraRelativeMovement(client.getTickDelta(), 120.0f);
-            //updateInteractionStatus();
+            updateInteractionStatus();
+
+            //cacheMovementHistory(client.player.getVelocity());
 
             if (isInteracting()) {
                 if (!isCameraGrabbed) {
@@ -123,6 +124,8 @@ public class RpgCamClient implements ClientModInitializer {
                 } else {
                     updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), savedMousePosX, savedMousePosY);
                 }
+            } else {
+                handleCameraRelativeMovement(LERP_FACTOR / 2);
             }
         }
     }
@@ -193,7 +196,7 @@ public class RpgCamClient implements ClientModInitializer {
                 BlockPos blockPos = blockHit.getBlockPos();
                 //client.player.sendMessage(Text.of("Block hit at: (" + blockPos.getX() + ", " + blockPos.getY() + ", " + blockPos.getZ() + ")"));
                 highlightedBlockPos = blockPos;
-                playerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), LERP_FACTOR);
+                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), LERP_FACTOR);
                 break;
             case ENTITY:
                 EntityHitResult entityHit = (EntityHitResult) result;
@@ -202,43 +205,26 @@ public class RpgCamClient implements ClientModInitializer {
         }
     }
 
-    private void handleCameraRelativeMovement(float deltaTime, float rotationSpeed /* degrees per second */) {
-//        PlayerEntity player = client.player;
-//
-//        if (player == null) return;
-//
-//        float playerYaw = MathHelper.wrapDegrees(player.getYaw());
-//        float cameraYaw = MathHelper.wrapDegrees(currentCameraAngleYaw);
-//
-//
-//        // Smoothly rotate the player towards the movement direction
-//        float targetPlayerYaw = (float) Math.toDegrees(Math.atan2(-movementVector.x, movementVector.z));
-//        rotationSpeed = rotationSpeed * deltaTime; // Degrees per second
-//        float newPlayerYaw = MathHelper.stepUnwrappedAngleTowards(playerYaw, targetPlayerYaw, rotationSpeed);
-//
-//        player.setYaw(newPlayerYaw);
-    }
+    private static void handleCameraRelativeMovement(float lerp) {
+        ClientPlayerEntity player = client.player;
 
-    public static Vec3d calculateAverageDirection() {
-        if (movementHistory.isEmpty()) return Vec3d.ZERO;
+        float cameraAngle = getCameraRotation().x;
+        if (currentMovementVector.horizontalLength() < 0.01f) return; // No movement, no update
 
-        Vec3d sum = Vec3d.ZERO;
-        for (Vec3d vec : movementHistory) {
-            sum = sum.add(vec);
-        }
-        return sum.multiply(1.0 / movementHistory.size());
-    }
+        // Interpolate smoothly towards the target yaw
+        float smoothedYaw = MathHelper.lerpAngleDegrees(
+                MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
+                player.getYaw(),
+                MathHelper.wrapDegrees(currentMovementAngle + cameraAngle + 180.0f)
+        );
 
-    public static void cacheMovementHistory(Vec3d movementVector) {
-        if (movementHistory.size() >= MOVEMENT_HISTORY_SIZE) {
-            movementHistory.pollFirst(); // Remove oldest entry
-        }
-        movementHistory.addLast(movementVector);
+        // Apply the rotation
+        setPlayerRotation(player, player.getPitch(), smoothedYaw);
     }
 
     private boolean isInteracting() {
         // Returns true if the player has interacted recently
-        return System.currentTimeMillis() - lastInteractionTime < 3000;
+        return System.currentTimeMillis() - lastInteractionTime < NOT_INTERACTING_WAIT_TIME;
     }
 
     private void updateInteractionStatus() {
@@ -255,7 +241,7 @@ public class RpgCamClient implements ClientModInitializer {
         }
     }
 
-    private static void playerLookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target, float lerp) {
+    private static void lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target, float lerp) {
         assert client.player != null;
         ClientPlayerEntity player = client.player;
 
@@ -268,13 +254,22 @@ public class RpgCamClient implements ClientModInitializer {
         float pitchToSet = MathHelper.wrapDegrees((float)(-(MathHelper.atan2(e, g) * 57.2957763671875)));
         float yawToSet = MathHelper.wrapDegrees((float)(MathHelper.atan2(f, d) * 57.2957763671875) - 90.0F);
 
-        player.setPitch(MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * client.getTickDelta(), 0.0F, 1.0F), player.getPitch(), pitchToSet));
-        player.setYaw(MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), yawToSet));
+        pitchToSet = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * client.getTickDelta(), 0.0F, 1.0F), player.getPitch(), pitchToSet);
+        yawToSet = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), yawToSet);
+
+        setPlayerRotation(player, pitchToSet, yawToSet);
+    }
+
+    private static void setPlayerRotation(ClientPlayerEntity player, float pitch, float yaw) {
+        player.setPitch(pitch);
+        player.setYaw(yaw);
         player.setHeadYaw(player.getYaw());
+
         player.prevPitch = player.getPitch();
         player.prevYaw = player.getYaw();
 
         player.prevHeadYaw = player.headYaw;
+
         player.bodyYaw = player.headYaw;
         player.prevBodyYaw = player.bodyYaw;
     }
@@ -290,7 +285,6 @@ public class RpgCamClient implements ClientModInitializer {
             }
 
             currentCameraAngleYaw = ((float) mouseDeltaX * SENSITIVITY) + oldCameraAngleYaw;
-            System.out.println("currentCameraAngleYaw: " + currentCameraAngleYaw);
             currentCameraAnglePitch = ((float) mouseDeltaY * SENSITIVITY) + oldCameraAnglePitch;
             currentCameraAnglePitch = MathHelper.clamp(currentCameraAnglePitch, -89.99f, 89.99f);
 
