@@ -16,6 +16,8 @@ import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.item.Items;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
@@ -38,8 +40,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static long lastInteractionTime = System.currentTimeMillis();
     private static double savedMousePosX = 0D;
     private static double savedMousePosY = 0D;
-    static double mouseDeltaX = 0.0D;
-    static double prevMousePosX = 0.0D;
+    static double mouseDeltaX = 0D;
+    static double prevMousePosX = 0D;
     private static float oldCameraAngleYaw = 0F;
     private static float oldCameraAnglePitch = 0F;
     private static float currentCameraAngleYaw = 0F;
@@ -55,7 +57,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static final float INITIAL_CAMERA_ANGLE_XZ = 45.0F;
     private static final float INITIAL_CAMERA_ANGLE_Y = 45.0F;
     private static final float LOOK_CURSOR_LERP_FACTOR = 5.0F;
-    private static final float ROTATE_LERP_FACTOR = 15.0F;
+    private static final float ROTATE_LERP_FACTOR = 2.5F;
+    private static final float PLAYER_ROTATE_SPEED = 20.0F;
     private static final double RAYCAST_MAX_DISTANCE = 100.0D;
     private static final int MOVEMENT_HISTORY_SIZE = 20;
     private static final long PLAYER_IDLE_WAIT_TIME = 4000;
@@ -117,8 +120,6 @@ public class RpgCamClient implements ClientModInitializer {
 
             updateInteractionStatus();
 
-            //cacheMovementHistory(client.player.getVelocity());
-
             if (isInteracting()) {
                 if (!isCameraGrabbed) {
                     updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), true);
@@ -142,7 +143,7 @@ public class RpgCamClient implements ClientModInitializer {
                     highlightedBlockPos = ((BlockHitResult) raycast).getBlockPos();
                 }
 
-                handleCameraRelativeMovement(ROTATE_LERP_FACTOR);
+                handleCameraRelativeMovement(PLAYER_ROTATE_SPEED, ROTATE_LERP_FACTOR);
             }
         }
     }
@@ -186,18 +187,25 @@ public class RpgCamClient implements ClientModInitializer {
     }
 
     private void updatePlayerRotationToCursor(double maxDistance, boolean lookThoughFluids, boolean includeEntities, double mouseX, double mouseY) {
-        HitResult raycast = raycastAtCursor(lookThoughFluids, maxDistance, mouseX, mouseY);
+        HitResult raycast = null;
+
+        if (includeEntities) {
+            raycast = raycastEntity(client.player, maxDistance);
+        }
+
+        if (raycast == null) {
+            raycast = raycastAtCursor(lookThoughFluids, maxDistance, mouseX, mouseY);
+        }
 
         switch(raycast.getType()) {
             case MISS:
                 //nothing near enough
                 break;
             case ENTITY:
-                if (includeEntities) {
-                    EntityHitResult entityHit = (EntityHitResult) raycast;
-                    Entity entity = entityHit.getEntity();
-                    break;
-                }
+                EntityHitResult entityHit = (EntityHitResult) raycast;
+                Entity entity = entityHit.getEntity();
+                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, entityHit.getEntity().getPos(), LOOK_CURSOR_LERP_FACTOR);
+                break;
             case BLOCK:
                 BlockHitResult blockHit = (BlockHitResult) raycast;
                 BlockPos blockPos = blockHit.getBlockPos();
@@ -229,7 +237,19 @@ public class RpgCamClient implements ClientModInitializer {
         return result;
     }
 
-    private static void handleCameraRelativeMovement(float lerp) {
+    public static HitResult raycastEntity(PlayerEntity player, double maxDistance) {
+        Entity cameraEntity = MinecraftClient.getInstance().cameraEntity;
+        if (cameraEntity != null) {
+            Vec3d cameraPos = player.getCameraPosVec(1.0f);
+            Vec3d rot = player.getRotationVec(1.0f);
+            Vec3d rayCastContext = cameraPos.add(rot.x * maxDistance, rot.y * maxDistance, rot.z * maxDistance);
+            Box box = cameraEntity.getBoundingBox().stretch(rot.multiply(maxDistance)).expand(1d, 1d, 1d);
+            return ProjectileUtil.raycast(cameraEntity, cameraPos, rayCastContext, box, (entity -> /* any custom parameters here */ !entity.isSpectator() && entity.canHit()), maxDistance);
+        }
+        return null;
+    }
+
+    private static void handleCameraRelativeMovement(float rotateSpeed, float lerp) {
         ClientPlayerEntity player = client.player;
 
         float cameraAngle = getCameraRotation().x;
@@ -240,11 +260,13 @@ public class RpgCamClient implements ClientModInitializer {
                 //MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
                 player.getYaw(),
                 MathHelper.wrapDegrees(currentMovementAngle + cameraAngle + 180.0f),
-                lerp
+                rotateSpeed
         );
 
+        float lerpedYaw = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), smoothedYaw);
+
         // Apply the rotation
-        setPlayerRotation(player, player.getPitch(), smoothedYaw);
+        setPlayerRotation(player, player.getPitch(), lerpedYaw);
     }
 
     private boolean isInteracting() {
