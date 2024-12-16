@@ -24,9 +24,6 @@ import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-
 import static com.brickmasterhunt.rpgcam.client.CameraUtils.getMouseBasedViewVector;
 
 @Environment(EnvType.CLIENT)
@@ -36,6 +33,8 @@ public class RpgCamClient implements ClientModInitializer {
     private static boolean isDetachedCameraEnabled = false;
     private static boolean isCameraGrabbed = false;
     private static boolean needsToInteract = false;
+    public static boolean isSprintAllowed = false;
+    private static boolean isPlayerIdle;
     private static long lastInteractionTime = System.currentTimeMillis();
     private static double savedMousePosX = 0D;
     private static double savedMousePosY = 0D;
@@ -47,6 +46,7 @@ public class RpgCamClient implements ClientModInitializer {
     private static float currentCameraAnglePitch = 0F;
     public static float currentMovementAngle = 0F;
     public static Vec3d currentMovementVector = Vec3d.ZERO;
+    private static BlockPos highlightedBlockPos = null;
     private static final KeyBinding MOVE_CAMERA_FORWARD_KEY = createKeybinding("move_camera_forward", GLFW.GLFW_KEY_KP_ADD);
     private static final KeyBinding TOGGLE_CAMERA_KEY = createKeybinding("toggle_camera", GLFW.GLFW_KEY_F7);
     public static final KeyBinding GRAB_CAMERA_KEY = createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
@@ -54,12 +54,13 @@ public class RpgCamClient implements ClientModInitializer {
     private static final float SENSITIVITY = 0.15F;
     private static final float INITIAL_CAMERA_ANGLE_XZ = 45.0F;
     private static final float INITIAL_CAMERA_ANGLE_Y = 45.0F;
-    private static final float LERP_FACTOR = 5.0F;
+    private static final float LOOK_CURSOR_LERP_FACTOR = 5.0F;
+    private static final float ROTATE_LERP_FACTOR = 15.0F;
     private static final double RAYCAST_MAX_DISTANCE = 100.0D;
     private static final int MOVEMENT_HISTORY_SIZE = 20;
+    private static final long PLAYER_IDLE_WAIT_TIME = 4000;
     private static final long NOT_INTERACTING_WAIT_TIME = 3000;
 
-    private static BlockPos highlightedBlockPos = null;
 
     @Override
     public void onInitializeClient() {
@@ -120,12 +121,28 @@ public class RpgCamClient implements ClientModInitializer {
 
             if (isInteracting()) {
                 if (!isCameraGrabbed) {
-                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET));
+                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), true);
                 } else {
-                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), savedMousePosX, savedMousePosY);
+                    updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), true, savedMousePosX, savedMousePosY);
                 }
             } else {
-                handleCameraRelativeMovement(LERP_FACTOR / 2);
+                double mouseX;
+                double mouseY;
+
+                if (isCameraGrabbed) {
+                    mouseX = savedMousePosX;
+                    mouseY = savedMousePosY;
+                } else {
+                    mouseX = client.mouse.getX();
+                    mouseY = client.mouse.getY();
+                }
+
+                HitResult raycast = raycastAtCursor(client.player.isHolding(Items.BUCKET), RAYCAST_MAX_DISTANCE, mouseX, mouseY);
+                if (raycast.getType() == HitResult.Type.BLOCK) {
+                    highlightedBlockPos = ((BlockHitResult) raycast).getBlockPos();
+                }
+
+                handleCameraRelativeMovement(ROTATE_LERP_FACTOR);
             }
         }
     }
@@ -164,16 +181,38 @@ public class RpgCamClient implements ClientModInitializer {
         }
     }
 
-    private void updatePlayerRotationToCursor(double maxDistance, boolean lookThoughFluids) {
-        updatePlayerRotationToCursor(maxDistance, lookThoughFluids, client.mouse.getX(), client.mouse.getY());
+    private void updatePlayerRotationToCursor(double maxDistance, boolean lookThroughFluids, boolean includeEntities) {
+        updatePlayerRotationToCursor(maxDistance, lookThroughFluids, includeEntities, client.mouse.getX(), client.mouse.getY());
     }
 
-    private void updatePlayerRotationToCursor(double maxDistance, boolean lookThoughFluids, double mouseX, double mouseY) {
+    private void updatePlayerRotationToCursor(double maxDistance, boolean lookThoughFluids, boolean includeEntities, double mouseX, double mouseY) {
+        HitResult raycast = raycastAtCursor(lookThoughFluids, maxDistance, mouseX, mouseY);
+
+        switch(raycast.getType()) {
+            case MISS:
+                //nothing near enough
+                break;
+            case ENTITY:
+                if (includeEntities) {
+                    EntityHitResult entityHit = (EntityHitResult) raycast;
+                    Entity entity = entityHit.getEntity();
+                    break;
+                }
+            case BLOCK:
+                BlockHitResult blockHit = (BlockHitResult) raycast;
+                BlockPos blockPos = blockHit.getBlockPos();
+                //client.player.sendMessage(Text.of("Block hit at: (" + blockPos.getX() + ", " + blockPos.getY() + ", " + blockPos.getZ() + ")"));
+                highlightedBlockPos = blockPos;
+                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), LOOK_CURSOR_LERP_FACTOR);
+                break;
+        }
+    }
+
+    private HitResult raycastAtCursor(boolean throughFluids, double maxDistance, double mouseX, double mouseY) {
         assert client.world != null;
         assert client.cameraEntity != null;
 
         Vec3d cameraPosVector = client.gameRenderer.getCamera().getPos();
-
         Vec3d mouseBasedViewVector = getMouseBasedViewVector(client, mouseX, mouseY);
         Vec3d farCameraVector = cameraPosVector.add(mouseBasedViewVector.x * maxDistance, mouseBasedViewVector.y * maxDistance, mouseBasedViewVector.z * maxDistance);
 
@@ -182,27 +221,12 @@ public class RpgCamClient implements ClientModInitializer {
                     cameraPosVector,
                     farCameraVector,
                     RaycastContext.ShapeType.OUTLINE,
-                    (!lookThoughFluids) ? RaycastContext.FluidHandling.ANY : RaycastContext.FluidHandling.NONE,
+                    (!throughFluids) ? RaycastContext.FluidHandling.ANY : RaycastContext.FluidHandling.NONE,
                     client.cameraEntity
             )
         );
 
-        switch(result.getType()) {
-            case MISS:
-                //nothing near enough
-                break;
-            case BLOCK:
-                BlockHitResult blockHit = (BlockHitResult) result;
-                BlockPos blockPos = blockHit.getBlockPos();
-                //client.player.sendMessage(Text.of("Block hit at: (" + blockPos.getX() + ", " + blockPos.getY() + ", " + blockPos.getZ() + ")"));
-                highlightedBlockPos = blockPos;
-                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), LERP_FACTOR);
-                break;
-            case ENTITY:
-                EntityHitResult entityHit = (EntityHitResult) result;
-                Entity entity = entityHit.getEntity();
-                break;
-        }
+        return result;
     }
 
     private static void handleCameraRelativeMovement(float lerp) {
@@ -212,10 +236,11 @@ public class RpgCamClient implements ClientModInitializer {
         if (currentMovementVector.horizontalLength() < 0.01f) return; // No movement, no update
 
         // Interpolate smoothly towards the target yaw
-        float smoothedYaw = MathHelper.lerpAngleDegrees(
-                MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
+        float smoothedYaw = MathHelper.stepUnwrappedAngleTowards(
+                //MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
                 player.getYaw(),
-                MathHelper.wrapDegrees(currentMovementAngle + cameraAngle + 180.0f)
+                MathHelper.wrapDegrees(currentMovementAngle + cameraAngle + 180.0f),
+                lerp
         );
 
         // Apply the rotation
