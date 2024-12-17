@@ -1,11 +1,11 @@
 package com.brickmasterhunt.rpgcam.client.mixin;
 
-import com.brickmasterhunt.rpgcam.client.RpgCamClient;
+import com.brickmasterhunt.rpgcam.client.CamState;
+import com.brickmasterhunt.rpgcam.client.RpgCam;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
@@ -19,7 +19,7 @@ public abstract class PlayerEntityMixin {
             )
     )
     private Vec3d travel(Vec3d movementInput) {
-        if (RpgCamClient.isDetachedCameraEnabled()) {
+        if (RpgCam.isDetachedCameraEnabled()) {
             MinecraftClient client = MinecraftClient.getInstance();
 
             float inputAngle = ( //Why is inverted, idk? but it works?
@@ -35,7 +35,7 @@ public abstract class PlayerEntityMixin {
 
             double length = movementInput.horizontalLength();
 
-            float movementYaw = RpgCamClient.getCameraRotation().x + inputAngle - client.player.getYaw();
+            float movementYaw = RpgCam.getCameraRotation().x + inputAngle - client.player.getYaw();
             double radianYaw = Math.toRadians(movementYaw);
 
             double motionX = Math.sin(radianYaw) * length;
@@ -43,8 +43,8 @@ public abstract class PlayerEntityMixin {
 
             Vec3d movementVector = new Vec3d(motionX, movementInput.y, motionZ);
 
-            RpgCamClient.currentMovementAngle = inputAngle;
-            RpgCamClient.currentMovementVector = movementVector;
+            CamState.currentMovementAngle = inputAngle;
+            CamState.currentMovementVector = movementVector;
             return movementVector;
         }
 

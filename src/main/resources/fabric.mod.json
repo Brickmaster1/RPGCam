@@ -12,7 +12,7 @@
   "accessWidener": "rpgcam.accesswidener",
   "entrypoints": {
     "client": [
-      "com.brickmasterhunt.rpgcam.client.RpgCamClient"
+      "com.brickmasterhunt.rpgcam.client.RpgCam"
     ]
   },
   "mixins": [

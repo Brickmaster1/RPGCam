@@ -1,4 +1,4 @@
-package com.brickmasterhunt.rpgcam.client;
+package com.brickmasterhunt.rpgcam.client.camera;
 
 /* code taken from MineFortress */
 

@@ -1,6 +1,6 @@
 package com.brickmasterhunt.rpgcam.client.mixin;
 
-import com.brickmasterhunt.rpgcam.client.RpgCamClient;
+import com.brickmasterhunt.rpgcam.client.RpgCam;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,7 +17,7 @@ public class CameraMixin {
     // Prevent setPos from causing recursion when the camera is detached
     @Inject(method = "setPos(DDD)V", at = @At("HEAD"), cancellable = true)
     public void setPos(double x, double y, double z, CallbackInfo ci) {
-        if (RpgCamClient.isDetachedCameraEnabled()) {
+        if (RpgCam.isDetachedCameraEnabled()) {
             this.pos = new Vec3d(x, y, z);
             ci.cancel();  // Prevent default camera position handling
         }
@@ -25,7 +25,7 @@ public class CameraMixin {
     // Prevent setRotation from causing recursion when the camera is detached
     @Inject(method = "setRotation(FF)V", at = @At("HEAD"), cancellable = true)
     public void setRotation(float yaw, float pitch, CallbackInfo ci) {
-        if (RpgCamClient.isDetachedCameraEnabled()) {
+        if (RpgCam.isDetachedCameraEnabled()) {
             // Prevent the default rotation handling to maintain custom camera behavior
             ci.cancel();
         }
