@@ -1,8 +1,11 @@
 package com.brickmasterhunt.rpgcam.client.mixin;
 
+import com.brickmasterhunt.rpgcam.client.CamState;
 import com.brickmasterhunt.rpgcam.client.RpgCam;
 import com.brickmasterhunt.rpgcam.client.interaction.InteractionManager;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.Mouse;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -10,13 +13,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
+import static com.brickmasterhunt.rpgcam.client.CamState.*;
+
 @Mixin(Mouse.class)
 public class MouseMixin {
-    @Shadow private double cursorDeltaX;
-
     @Inject(method = "lockCursor", at = @At("HEAD"), cancellable = true)
     private void lockCursor(CallbackInfo ci) {
-        if (RpgCam.isDetachedCameraEnabled() && !RpgCam.isCameraGrabbed()) {
+        if (isDetachedCameraEnabled() && !isCameraGrabbed()) {
             ci.cancel();
         }
     }
@@ -31,8 +34,9 @@ public class MouseMixin {
             locals = LocalCapture.CAPTURE_FAILSOFT
     )
     private void preventPlayerRotation(CallbackInfo ci, double d, double e, double k, double l, double f, double g, double h, int m) {
-        if (RpgCam.isCameraGrabbed()) {
-            InteractionManager.handleCameraRotateInteraction(l * (double)m);
+        if (isCameraGrabbed()) {
+            onMouseRelativeMove(l * (double) m);
+            //InteractionManager.handleCameraRotateInteraction(l * (double)m);
             ci.cancel(); // Skip only the call to changeLookDirection
         }
     }

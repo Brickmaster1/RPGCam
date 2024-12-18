@@ -1,31 +1,32 @@
-package com.brickmasterhunt.rpgcam.client.movement;
+package com.brickmasterhunt.rpgcam.client.player.movement;
 
 import com.brickmasterhunt.rpgcam.client.CamState;
-import com.brickmasterhunt.rpgcam.client.RpgCam;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
+import static com.brickmasterhunt.rpgcam.client.CamState.*;
+import static com.brickmasterhunt.rpgcam.client.player.PlayerUtils.*;
+
 public class RelativeMovement {
-    public static void handleCameraRelativeMovement(float rotateSpeed, float lerp) {
+    public static void handleMovementRelativeToCamera(float rotateSpeed, float lerp) {
         ClientPlayerEntity player = CamState.client.player;
 
-        float cameraAngle = RpgCam.getCameraRotation().x;
-        if (CamState.currentMovementVector.horizontalLength() < 0.01f) return; // No movement, no update
+        float cameraAngle = getCameraYaw();
+        if (getRelativeMovementVector().horizontalLength() < 0.01f) return; // No movement, no update
 
         // Interpolate smoothly towards the target yaw
         float smoothedYaw = MathHelper.stepUnwrappedAngleTowards(
                 //MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
                 player.getYaw(),
-                MathHelper.wrapDegrees(CamState.currentMovementAngle + cameraAngle + 180.0f),
+                MathHelper.wrapDegrees(getRelativeMovementAngle() + cameraAngle + 180.0f),
                 rotateSpeed
         );
 
         float lerpedYaw = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * CamState.client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), smoothedYaw);
 
-        // Apply the rotation
-        RpgCam.setPlayerRotation(player, player.getPitch(), lerpedYaw);
+        setPlayerRotation(player, player.getPitch(), lerpedYaw);
     }
 
     public static void lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target, float lerp) {
@@ -44,6 +45,6 @@ public class RelativeMovement {
         pitchToSet = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * CamState.client.getTickDelta(), 0.0F, 1.0F), player.getPitch(), pitchToSet);
         yawToSet = MathHelper.lerpAngleDegrees(MathHelper.clamp(lerp * CamState.client.getTickDelta(), 0.0F, 1.0F), player.getYaw(), yawToSet);
 
-        RpgCam.setPlayerRotation(player, pitchToSet, yawToSet);
+        setPlayerRotation(player, pitchToSet, yawToSet);
     }
 }
