@@ -32,7 +32,7 @@ public class RaycastUtils {
             );
         }
 
-        if (result.getType() != HitResult.Type.ENTITY) {
+        if (result == null) {
             result = client.world.raycast(
                 new RaycastContext(
                     cameraPosVector,

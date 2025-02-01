@@ -1,6 +1,5 @@
 package com.brickmasterhunt.rpgcam.client.interaction;
 
-import com.brickmasterhunt.rpgcam.client.player.movement.RelativeMovement;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.render.Camera;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
@@ -15,12 +14,13 @@ import org.lwjgl.glfw.GLFW;
 
 import static com.brickmasterhunt.rpgcam.client.CamState.*;
 import static com.brickmasterhunt.rpgcam.client.camera.raycast.RaycastUtils.*;
+import static com.brickmasterhunt.rpgcam.client.player.movement.RelativeMovement.*;
 
 public class InteractionManager {
     private static long lastInteractionTime = System.currentTimeMillis();
 
     public static boolean isPlayerInteracting() {
-        return System.currentTimeMillis() - lastInteractionTime < NOT_INTERACTING_WAIT_TIME;
+        return System.currentTimeMillis() - lastInteractionTime < CONFIG.NOT_INTERACTING_WAIT_TIME;
     }
 
     public static void updatePlayerInteractionStatus() {
@@ -49,7 +49,7 @@ public class InteractionManager {
             Vec3d playerPos = client.player.getPos();
 
             // Initialize camera positioning (45 degrees, 5 meters away) (add config vals for everything later)
-            setRadialCameraPosition(playerPos, PLAYER_CAMERA_DISTANCE, INITIAL_CAMERA_ANGLE_Y, INITIAL_CAMERA_ANGLE_XZ);
+            setRadialCameraPosition(playerPos, CONFIG.INITIAL_PLAYER_CAMERA_DISTANCE, CONFIG.INITIAL_CAMERA_ANGLE_Y, CONFIG.INITIAL_CAMERA_ANGLE_XZ);
             setRadialCameraAngle(playerPos);
         } else {
             client.mouse.lockCursor();
@@ -67,45 +67,40 @@ public class InteractionManager {
             case ENTITY:
                 EntityHitResult entityHit = (EntityHitResult) raycast;
                 Entity entity = entityHit.getEntity();
-                RelativeMovement.lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, entityHit.getEntity().getPos(), LOOK_CURSOR_LERP_FACTOR);
+                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, entityHit.getEntity().getPos(), CONFIG.PLAYER_INTERACT_FOLLOW_CURSOR_LERP);
                 break;
             case BLOCK:
                 BlockHitResult blockHit = (BlockHitResult) raycast;
                 BlockPos blockPos = blockHit.getBlockPos();
                 highlightBlockAt(blockPos);
-                RelativeMovement.lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), LOOK_CURSOR_LERP_FACTOR);
+                lerpPlayerLookAt(EntityAnchorArgumentType.EntityAnchor.EYES, blockHit.withSide(blockHit.getSide()).getPos(), CONFIG.PLAYER_INTERACT_FOLLOW_CURSOR_LERP);
                 break;
         }
     }
 
     public static void handleCameraRotateInteraction() {
-        Camera camera = client.gameRenderer.getCamera();
-        if (GRAB_CAMERA_KEY.isPressed()) {
+        if (isCameraGrabbed()) {
             var mouseDelta = getMouseRelativeDelta();
 
-            if (Math.abs(mouseDelta.x) <= 1.0d && Math.abs(mouseDelta.y) <= 1.0d) {
+            if (Math.abs(mouseDelta.x) < 1.0d && Math.abs(mouseDelta.y) < 1.0d) {
                 return;
             }
 
+            //System.out.println("mouseDelta with sensitivity " + mouseDelta.x * CONFIG.GRAB_CAMERA_MOUSE_SENSITIVITY);
+
             var newCameraAngleYaw = MathHelper.wrapDegrees(
-                    ((float) mouseDelta.x * SENSITIVITY) + getCameraYaw()
+                ((float) mouseDelta.x * CONFIG.GRAB_CAMERA_MOUSE_SENSITIVITY) + getCameraYaw()
             );
             var newCameraAnglePitch = MathHelper.clamp(
-                    ((float) mouseDelta.y * SENSITIVITY) + getCameraPitch(),
-                    -89.99f,
-                    89.99f
+                ((float) mouseDelta.y * CONFIG.GRAB_CAMERA_MOUSE_SENSITIVITY) + getCameraPitch(),
+                -89.99f,
+                89.99f
             );
 
             Vec3d playerPos = client.player.getPos();
 
-            setRadialCameraPosition(playerPos, PLAYER_CAMERA_DISTANCE, newCameraAnglePitch, newCameraAngleYaw);
+            setRadialCameraPosition(playerPos, CONFIG.INITIAL_PLAYER_CAMERA_DISTANCE, newCameraAnglePitch, newCameraAngleYaw);
             setRadialCameraAngle(playerPos);
-        } else if (isCameraGrabbed()) {
-            // Set mouse back to where user left it before interaction
-            var savedMousePos = getMousePos();
-            onToggleGrabbedCamera();
-            client.mouse.unlockCursor();
-            GLFW.glfwSetCursorPos(client.getWindow().getHandle(), savedMousePos.x, savedMousePos.y);
         }
     }
     

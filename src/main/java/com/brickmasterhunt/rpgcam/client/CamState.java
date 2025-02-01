@@ -1,34 +1,22 @@
 package com.brickmasterhunt.rpgcam.client;
 
+import com.brickmasterhunt.rpgcam.client.config.CamConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.render.Camera;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec2f;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Vector2d;
 import org.lwjgl.glfw.GLFW;
 
-import com.brickmasterhunt.rpgcam.client.interaction.InteractionManager.*;
-
 public class CamState {
     public static final MinecraftClient client = MinecraftClient.getInstance();
+
+    public static CamConfig CONFIG = null;
 
     public static final KeyBinding GRAB_CAMERA_KEY = RpgCam.createKeybinding("grab_camera", GLFW.GLFW_MOUSE_BUTTON_MIDDLE);
     public static final KeyBinding MOVE_CAMERA_FORWARD_KEY = RpgCam.createKeybinding("move_camera_forward", GLFW.GLFW_KEY_KP_ADD);
     public static final KeyBinding TOGGLE_CAMERA_KEY = RpgCam.createKeybinding("toggle_camera", GLFW.GLFW_KEY_F7);
-
-    public static float PLAYER_CAMERA_DISTANCE = 7.0F;
-    public static float SENSITIVITY = 0.15F;
-    public static float ROTATE_LERP_FACTOR = 2.5F;
-    public static float PLAYER_ROTATE_SPEED = 20.0F;
-    public static float INITIAL_CAMERA_ANGLE_XZ = 45.0F;
-    public static float INITIAL_CAMERA_ANGLE_Y = 45.0F;
-    public static float LOOK_CURSOR_LERP_FACTOR = 5.0F;
-    public static double RAYCAST_MAX_DISTANCE = 100.0D;
-    public static int MOVEMENT_HISTORY_SIZE = 20;
-    public static long PLAYER_IDLE_WAIT_TIME = 4000;
-    public static long NOT_INTERACTING_WAIT_TIME = 3000;
 
     private static boolean isDetachedCameraEnabled = false;
     private static boolean isCameraGrabbed = false;
@@ -57,15 +45,18 @@ public class CamState {
         return isCameraGrabbed;
     }
 
-    public static void onToggleGrabbedCamera() {
-        isCameraGrabbed = !isCameraGrabbed;
-
-        if (isCameraGrabbed) {
+    public static void evaluateCameraGrabState() {
+        if (!isCameraGrabbed && GRAB_CAMERA_KEY.isPressed()) {
+            isCameraGrabbed = true;
             savedMousePosX = client.mouse.getX();
             savedMousePosY = client.mouse.getY();
             client.mouse.lockCursor();
-        } else {
+        } else if (isCameraGrabbed && !GRAB_CAMERA_KEY.isPressed()) {
+            // Set mouse back to where user left it before interaction
+            var savedMousePos = getMousePos();
             client.mouse.unlockCursor();
+            GLFW.glfwSetCursorPos(client.getWindow().getHandle(), savedMousePos.x, savedMousePos.y);
+            isCameraGrabbed = false;
         }
     }
 
@@ -170,6 +161,9 @@ public class CamState {
         mouseDeltaY = y;
 
         prevMousePosX = mousePosX;
+        System.out.println("mousePosX" + mousePosX);
+        System.out.println("prevMousePosX" + prevMousePosX);
+        System.out.println("mouseDeltaX" + mouseDeltaX);
     }
 
     public static BlockPos getHighlightedBlockPos() {

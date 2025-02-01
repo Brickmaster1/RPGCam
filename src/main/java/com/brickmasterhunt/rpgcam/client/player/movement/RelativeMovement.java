@@ -1,6 +1,7 @@
 package com.brickmasterhunt.rpgcam.client.player.movement;
 
 import com.brickmasterhunt.rpgcam.client.CamState;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.util.math.MathHelper;
@@ -10,6 +11,35 @@ import static com.brickmasterhunt.rpgcam.client.CamState.*;
 import static com.brickmasterhunt.rpgcam.client.player.PlayerUtils.*;
 
 public class RelativeMovement {
+    public static float getAngleFromKeys() {
+        return ( //Why is inverted, idk? but it works?
+            (client.options.backKey.isPressed() && client.options.rightKey.isPressed()) ? 45.0f :
+            (client.options.backKey.isPressed() && client.options.leftKey.isPressed()) ? 135.0f :
+            (client.options.forwardKey.isPressed() && client.options.leftKey.isPressed()) ? 225.0f :
+            (client.options.forwardKey.isPressed() && client.options.rightKey.isPressed()) ? 315.0f :
+            client.options.rightKey.isPressed() ? 0.0f :
+            client.options.backKey.isPressed() ? 90.0f :
+            client.options.leftKey.isPressed() ? 180.0f :
+            270.0f // client.options.forwardKey.isPressed()
+        );
+    }
+
+    public static Vec3d calculateCameraRelativeMovementVector(Vec3d movementInput, float inputAngle) {
+        MinecraftClient client = MinecraftClient.getInstance();
+
+
+
+        double length = movementInput.horizontalLength();
+
+        float movementYaw = getCameraYaw() + inputAngle - client.player.getYaw() - 90.0f;
+        double radianYaw = Math.toRadians(movementYaw);
+
+        double motionX = Math.sin(radianYaw) * length;
+        double motionZ = -Math.cos(radianYaw) * length;
+
+        return new Vec3d(motionX, movementInput.y, motionZ);
+    }
+
     public static void handleMovementRelativeToCamera(float rotateSpeed, float lerp) {
         ClientPlayerEntity player = CamState.client.player;
 
@@ -20,7 +50,7 @@ public class RelativeMovement {
         float smoothedYaw = MathHelper.stepUnwrappedAngleTowards(
                 //MathHelper.clamp(lerp * client.getTickDelta(), 0.0f, 1.0f),
                 player.getYaw(),
-                MathHelper.wrapDegrees(getRelativeMovementAngle() + cameraAngle + 180.0f),
+                MathHelper.wrapDegrees(getRelativeMovementAngle() + cameraAngle + 90.0f),
                 rotateSpeed
         );
 

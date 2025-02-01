@@ -27,7 +27,6 @@ import static com.brickmasterhunt.rpgcam.client.camera.raycast.RaycastUtils.*;
 @Environment(EnvType.CLIENT)
 public class RpgCam implements ClientModInitializer {
     public static final String MOD_ID = "rpgcam";
-    public static CamConfig CONFIG = null;
 
     @Override
     public void onInitializeClient() {
@@ -54,24 +53,21 @@ public class RpgCam implements ClientModInitializer {
         }
 
         if (isDetachedCameraEnabled()) {
-            if (GRAB_CAMERA_KEY.isPressed()) {
-                onToggleGrabbedCamera(); // Rotate camera about player if pressed
-            }
-
             updatePlayerInteractionStatus(); // Check if player is trying to interact with entities/blocks
 
+            evaluateCameraGrabState(); // Rotate camera about player if pressed
             handleCameraRotateInteraction(); // Check and activate camera grabbing if player uses assigned key
 
             var mousePos = getMousePos();
             if (isPlayerInteracting()) {
-                updatePlayerRotationToCursor(RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), true, mousePos.x, mousePos.y);
+                updatePlayerRotationToCursor(CONFIG.RAYCAST_MAX_DISTANCE, client.player.isHolding(Items.BUCKET), true, mousePos.x, mousePos.y);
             } else {
-                HitResult raycast = raycastAtCursor(client.player.isHolding(Items.BUCKET), true, RAYCAST_MAX_DISTANCE, mousePos.x, mousePos.y);
+                HitResult raycast = raycastAtCursor(client.player.isHolding(Items.BUCKET), true, CONFIG.RAYCAST_MAX_DISTANCE, mousePos.x, mousePos.y);
                 if (raycast.getType() == HitResult.Type.BLOCK) {
                     highlightBlockAt(((BlockHitResult) raycast).getBlockPos());
                 }
 
-                handleMovementRelativeToCamera(PLAYER_ROTATE_SPEED, ROTATE_LERP_FACTOR);
+                handleMovementRelativeToCamera(CONFIG.PLAYER_ROTATE_SPEED, CONFIG.PLAYER_RELATIVE_MOVE_ROTATE_LERP);
             }
         }
     }
